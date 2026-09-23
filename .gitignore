@@ -5,3 +5,4 @@ __pycache__/
 frontend/dist/
 *.zip
 reports/report_*.md
+.DS_Store

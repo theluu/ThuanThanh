@@ -38,8 +38,8 @@ export default function App() {
   }, [runId, pollKey])
 
   useEffect(() => {
-    if (run?.status === 'completed') api.prices(!!run.result?.external_approved).then(setPrices).catch((e) => setError(e.message))
-  }, [run?.status, run?.result?.external_approved])
+    if (run?.status === 'completed') api.prices(runId).then(setPrices).catch((e) => setError(e.message))
+  }, [runId, run?.status, run?.result?.external_approved])
 
   const start = async (e) => {
     e.preventDefault()
@@ -69,11 +69,11 @@ export default function App() {
               <p className="brand-sub">Nhóm agent phân tích và dự báo giá JKM</p>
             </div>
           </div>
-          <p className={`llm ${health?.llm ? 'on' : ''}`}>{health ? (health.llm ? 'OpenAI đang bật' : 'Chế độ không LLM') : 'Đang kết nối…'}</p>
+          <p className={`llm ${health?.llm ? 'on' : ''}`}>{health ? (health.llm ? `LLM: ${health.providers.join(' → ')}` : 'Chế độ không LLM') : 'Đang kết nối…'}</p>
         </div>
         <form className="wrap ask" onSubmit={start}>
           <label htmlFor="req" className="sr-only">Yêu cầu cho nhóm agent</label>
-          <input id="req" value={request} onChange={(e) => setRequest(e.target.value)} />
+          <input id="req" maxLength={500} value={request} onChange={(e) => setRequest(e.target.value)} />
           <button className="btn btn-cryo" disabled={busy || !request.trim()}>{busy ? 'Nhóm đang làm việc…' : 'Giao việc cho nhóm'}</button>
         </form>
       </header>

@@ -8,7 +8,7 @@ from app.graph import build_graph
 
 @pytest.fixture
 def run_graph(train_df, eval_df, monkeypatch, tmp_path):
-    monkeypatch.setattr(llm, "llm_enabled", lambda: False)  # deterministic, offline
+    monkeypatch.setattr(llm, "active_providers", lambda: [])  # deterministic, offline
     monkeypatch.setattr("app.config.REPORTS_DIR", tmp_path)
     steps = []
     deps = Deps(load_training=lambda: train_df.copy(), load_external=lambda: eval_df.copy(),

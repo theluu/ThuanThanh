@@ -3,7 +3,7 @@
 ## 1. Tổng quan
 Hệ thống mô phỏng một nhóm dữ liệu đa tác tử phân tích thị trường LNG và **dự báo giá JKM tháng kế tiếp (01/2026)**.
 Mọi con số (thống kê, CV, dự báo, backtest) được tính bởi **tool Python deterministic**; LLM (OpenAI) chỉ lập kế hoạch
-và diễn giải → không "bịa số". Không có API key → fallback template, pipeline vẫn chạy trọn vẹn.
+và diễn giải → không "bịa số". OpenAI lỗi/hết hạn key → tự chuyển sang Anthropic Claude; không provider nào dùng được → fallback template, pipeline vẫn chạy trọn vẹn.
 
 ```
 React UI ──HTTP──► FastAPI ──► LangGraph StateGraph (MemorySaver checkpointer, thread_id = run_id)

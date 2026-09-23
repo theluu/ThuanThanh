@@ -93,6 +93,19 @@ def update_run(run_id: str, **fields) -> None:
         conn.execute(runs.update().where(runs.c.id == run_id).values(updated_at=_now(), **fields))
 
 
+def claim_approval(run_id: str) -> bool:
+    """Atomically move a run out of waiting_approval, so a decision can only be applied once."""
+    with main_engine().begin() as conn:
+        res = conn.execute(runs.update().where(runs.c.id == run_id, runs.c.status == "waiting_approval")
+                           .values(status="running", pending_approval=None, updated_at=_now()))
+    return res.rowcount == 1
+
+
+def count_active_runs() -> int:
+    with main_engine().connect() as conn:
+        return len(conn.execute(select(runs.c.id).where(runs.c.status == "running")).all())
+
+
 def get_run(run_id: str) -> dict | None:
     with main_engine().connect() as conn:
         row = conn.execute(select(runs).where(runs.c.id == run_id)).mappings().first()

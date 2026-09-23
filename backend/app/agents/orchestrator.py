@@ -1,4 +1,5 @@
 """Orchestrator: understands the request, plans the work and assigns tasks to each agent."""
+from ..guardrails import wrap_untrusted
 from ..llm import ask
 from .deps import Deps
 from .state import AgentState
@@ -21,7 +22,7 @@ def make_node(deps: Deps):
         brief, src = ask(
             "You are the lead of an LNG market analytics team. Restate the business objective in 2-3 sentences (Vietnamese) "
             "and mention which team member handles which part.",
-            f"Request: {state['request']}\nTeam plan: {PLAN}",
+            f"Request:\n{wrap_untrusted(state['request'])}\nTeam plan: {PLAN}",
             fallback=f"Mục tiêu: {state['request']}. Team thực hiện theo kế hoạch {len(PLAN)} bước.",
         )
         deps.trace(run_id, NAME, "Created plan & assigned tasks", {"plan": PLAN, "brief": brief, "source": src})

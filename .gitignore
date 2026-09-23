@@ -4,3 +4,4 @@ node_modules/
 __pycache__/
 frontend/dist/
 *.zip
+reports/report_*.md

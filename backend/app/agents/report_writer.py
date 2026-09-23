@@ -75,7 +75,8 @@ def make_node(deps: Deps):
                  "analyst": state.get("analysis_notes"), "scientist": state.get("ds_notes")}
         summary, src = ask(
             "Bạn là trưởng nhóm phân tích. Viết tóm tắt điều hành 4-5 câu tiếng Việt cho lãnh đạo: hiện trạng thị trường JKM, "
-            "dự báo tháng tới (số trung bình), độ tin cậy, khuyến nghị. Chỉ dùng số liệu được cung cấp.",
+            "dự báo tháng tới (số trung bình), độ tin cậy, kết quả backtest (nếu có), khuyến nghị. Chỉ dùng số liệu được cung cấp. "
+            "Lưu ý: naive = giữ nguyên giá cuối (không hàm ý tăng/giảm); drift = ngoại suy xu hướng 60 phiên; ridge_lag = hồi quy trên lag.",
             json.dumps(facts, ensure_ascii=False, default=str),
             fallback=(f"JKM kết thúc kỳ ở {state['eda']['latest']['JKM']} USD/MMBtu. Nhóm dự báo giá trung bình tháng tới "
                       f"≈ {mr['forecast_mean']:.3f} USD/MMBtu bằng mô hình {mr['chosen']}."),

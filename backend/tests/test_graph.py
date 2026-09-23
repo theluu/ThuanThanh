@@ -25,6 +25,43 @@ def run_graph(train_df, eval_df, monkeypatch, tmp_path):
     return _run
 
 
+@pytest.fixture
+def graph_and_steps(train_df, eval_df, monkeypatch, tmp_path):
+    monkeypatch.setattr(llm, "active_providers", lambda: [])
+    monkeypatch.setattr("app.config.REPORTS_DIR", tmp_path)
+    steps = []
+    deps = Deps(load_training=lambda: train_df.copy(), load_external=lambda: eval_df.copy(),
+                trace=lambda run_id, agent, action, detail: steps.append((agent, action)))
+    return build_graph(deps), steps
+
+
+def test_off_topic_request_is_declined_before_any_work(graph_and_steps):
+    graph, steps = graph_and_steps
+    out = graph.invoke({"run_id": "t2", "request": "Hôm nay ăn gì"}, {"configurable": {"thread_id": "t2"}})
+    assert out["declined"] and "ngoài phạm vi" in out["report"]
+    assert "__interrupt__" not in out and "forecast" not in out
+    assert {a for a, _ in steps} == {"Orchestrator"}
+
+
+def test_no_backtest_request_skips_approval(graph_and_steps):
+    graph, steps = graph_and_steps
+    out = graph.invoke({"run_id": "t3", "request": "Dự báo JKM tháng tới, không cần backtest"},
+                       {"configurable": {"thread_id": "t3"}})
+    assert "__interrupt__" not in out  # never paused for the human
+    assert out["backtest"] is None and not any(a == "Human" for a, _ in steps)
+    assert "không cần" in out["report"]
+
+
+def test_february_target_forecasts_february(graph_and_steps):
+    graph, _ = graph_and_steps
+    cfg = {"configurable": {"thread_id": "t4"}}
+    graph.invoke({"run_id": "t4", "request": "Dự báo JKM tháng 02/2026"}, cfg)
+    out = graph.invoke(Command(resume={"approved": True}), cfg)
+    assert {r["Date"][:7] for r in out["forecast"]} == {"2026-02"} and len(out["forecast"]) == 20
+    assert out["backtest"]["n_days"] == 11  # eval data covers Feb 2026 up to the 17th
+    assert "tháng 2026-02" in out["report"]
+
+
 def test_graph_approved_runs_backtest(run_graph):
     final, steps = run_graph(True)
     assert final["backtest"]["n_days"] == 20

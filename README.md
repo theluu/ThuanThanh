@@ -23,6 +23,12 @@ Trên UI: bấm **Chạy team agent** → khi Data Engineer xin kết nối DB n
 | POST | `/api/runs/{id}/approval` `{approved}` | Duyệt/từ chối kết nối DB ngoài (409 nếu không chờ duyệt) |
 | GET | `/api/prices?run_id=` | Chuỗi giá cho biểu đồ (chuỗi 2026 chỉ trả về khi run đã hoàn tất **và** được duyệt) |
 
+## Orchestrator hiểu yêu cầu
+- Yêu cầu ngoài phạm vi LNG/JKM (vd. "Hôm nay ăn gì") → run kết thúc ở trạng thái `declined`, không nạp dữ liệu, không chạy mô hình.
+- Tham số trích từ yêu cầu: tháng dự báo **01** hoặc **02/2026** (vd. "tháng 02/2026"), "không cần backtest" → bỏ qua bước xin kết nối DB ngoài.
+- Yêu cầu & trọng tâm được đưa vào prompt của Analyst/Report Writer và vào đầu báo cáo. Các con số dự báo đến từ mô hình, nên cùng tháng mục tiêu thì cùng số.
+- Từ chối kết nối DB ngoài không đổi dự báo (dữ liệu 2026 chỉ để chấm điểm) — UI ghi rõ "chưa kiểm định".
+
 ## LLM failover
 Thứ tự: **OpenAI → Anthropic Claude (dự phòng) → template**. Khi một provider trả lỗi xác thực (key hết hạn/sai, 401/403) hoặc hết quota, nó bị tắt đến khi restart backend và mọi lời gọi chuyển sang provider kế tiếp; lỗi tạm thời (timeout, 5xx) chỉ chuyển provider cho lần gọi đó. `GET /api/health` trả `providers` đang hoạt động; trace của mỗi agent ghi `source` = provider đã dùng.
 

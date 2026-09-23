@@ -7,7 +7,8 @@ export default function Pipeline({ run, onDecide, deciding }) {
   const decision = steps.find((s) => s.agent === 'Human')
   const rejected = decision?.action.startsWith('Rejected')
   const waiting = run?.status === 'waiting_approval'
-  const finished = run?.status === 'completed'
+  const finished = run?.status === 'completed' || run?.status === 'declined'
+  const noBacktest = run?.result?.params?.backtest === false
   const failed = run?.status === 'failed'
 
   // Last station that has written to the trace; everything before it is done.
@@ -36,7 +37,7 @@ export default function Pipeline({ run, onDecide, deciding }) {
           <li key={st.key} className={`station s-${states[i]} ${st.valve ? 'is-valve' : ''}`}>
             <span className="joint" aria-hidden="true">{st.valve ? <ValveIcon /> : i + 1}</span>
             <span className="st-label">{st.label}</span>
-            <span className="st-role">{st.valve && decision ? (rejected ? 'Đã từ chối — bỏ qua backtest' : 'Đã cho phép') : st.role}</span>
+            <span className="st-role">{st.valve && decision ? (rejected ? 'Đã từ chối — bỏ qua backtest' : 'Đã cho phép') : st.valve && noBacktest ? 'Không cần — không yêu cầu backtest' : st.role}</span>
             {st.valve && waiting && run.pending_approval && (
               <div className="valve-card" role="alertdialog" aria-labelledby="valve-title">
                 <p id="valve-title" className="vc-title">Data Engineer muốn kết nối một cơ sở dữ liệu khác</p>

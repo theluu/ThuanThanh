@@ -1,6 +1,7 @@
 """Data Analyst: exploratory analysis of the JKM market and its drivers."""
 import json
 
+from ..guardrails import wrap_untrusted
 from ..llm import ask
 from ..tools.analysis import run_eda
 from ..tools.forecast import preprocess
@@ -33,8 +34,9 @@ def make_node(deps: Deps):
         facts["monthly_last6"] = eda["monthly"][-6:]
         notes, src = ask(
             "Bạn là Data Analyst thị trường LNG. Viết 5-7 gạch đầu dòng tiếng Việt, súc tích, chỉ dùng số liệu được cung cấp: "
-            "xu hướng, mùa vụ, biến động, quan hệ với HH/Brent/DXY/Gold, hàm ý cho dự báo tháng tới. Không bịa số.",
-            json.dumps(facts, ensure_ascii=False),
+            "xu hướng, mùa vụ, biến động, quan hệ với HH/Brent/DXY/Gold, hàm ý cho dự báo tháng tới. Không bịa số. "
+            "Ưu tiên những khía cạnh mà yêu cầu của người dùng nhắc tới (nếu dữ liệu có).",
+            f"{wrap_untrusted(state['request'])}\nSố liệu:\n" + json.dumps(facts, ensure_ascii=False),
             fallback=fallback_notes(eda),
         )
         deps.trace(run_id, NAME, "Wrote market insights for Data Scientist & Report Writer", {"notes": notes, "source": src})

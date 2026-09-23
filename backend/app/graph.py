@@ -17,8 +17,9 @@ def build_graph(deps: Deps, checkpointer=None):
     g.add_node("report_writer", report_writer.make_node(deps))
 
     g.add_edge(START, "orchestrator")
-    g.add_edge("orchestrator", "data_engineer")
-    g.add_edge("data_engineer", "approval_gate")
+    g.add_conditional_edges("orchestrator", lambda s: END if s.get("declined") else "data_engineer")
+    # No backtest requested -> no reason to ask for the external DB.
+    g.add_conditional_edges("data_engineer", lambda s: "approval_gate" if s["params"]["backtest"] else "data_analyst")
     g.add_edge("approval_gate", "data_analyst")
     g.add_edge("data_analyst", "data_scientist")
     g.add_edge("data_scientist", "report_writer")

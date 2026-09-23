@@ -39,10 +39,10 @@ def make_features(df: pd.DataFrame) -> pd.DataFrame:
     return feats
 
 
-def horizon_dates(last_date: pd.Timestamp) -> list[pd.Timestamp]:
-    """Business days of the calendar month following `last_date` (1 Jan excluded)."""
+def horizon_dates(last_date: pd.Timestamp, months: int = 1) -> list[pd.Timestamp]:
+    """Business days from the month after `last_date` through the end of the `months`-th month ahead (1 Jan excluded)."""
     start = (last_date + pd.offsets.MonthBegin(1)).normalize()
-    end = start + pd.offsets.MonthEnd(0)
+    end = start + pd.offsets.MonthEnd(months)
     days = pd.bdate_range(start, end)
     return [d for d in days if not (d.month == 1 and d.day == 1)]
 

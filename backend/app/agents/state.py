@@ -5,6 +5,9 @@ from typing import Any, TypedDict
 class AgentState(TypedDict, total=False):
     run_id: str
     request: str
+    declined: bool            # Orchestrator: request outside LNG/JKM scope -> run stops
+    params: dict              # Orchestrator: target_month, months_ahead, backtest, notes
+    brief: str                # Orchestrator: restated objective
     plan: list[dict]          # Orchestrator: ordered tasks per agent
     data_summary: dict        # Data Engineer: rows, date range, data-quality info
     external_approved: bool   # Human decision on connecting to the external DB

@@ -6,7 +6,9 @@ import json
 from datetime import datetime
 
 from .. import config
+from ..guardrails import wrap_untrusted
 from ..llm import ask
+from ..tools.intent import quote
 from .deps import Deps
 from .state import AgentState
 
@@ -21,16 +23,27 @@ def _metrics_table(rows: dict) -> str:
 
 def build_report(state: AgentState, summary_text: str) -> str:
     eda, mr, fc, bt, ds = state["eda"], state["model_results"], state["forecast"], state.get("backtest"), state["data_summary"]
+    params = state["params"]
     month = fc[0]["Date"][:7]
+    if params["backtest"]:
+        db_line = "đã được phê duyệt" if state.get("external_approved") else "bị từ chối — không backtest"
+    else:
+        db_line = "không cần (yêu cầu không đòi hỏi backtest)"
     lt = eda["latest"]
     parts = [
         f"# Báo cáo phân tích & dự báo giá JKM LNG — tháng {month}",
         f"_Tạo bởi nhóm agent (Orchestrator → Data Engineer → Data Analyst → Data Scientist → Report Writer) · run `{state['run_id']}` · {datetime.now():%Y-%m-%d %H:%M}_",
+        "## Yêu cầu & cách nhóm hiểu",
+        f"- Yêu cầu: *“{quote(state['request'])}”*",
+        f"- Tham số: dự báo tháng **{params['target_month']}** ({params['months_ahead']} tháng sau dữ liệu huấn luyện); "
+        f"kiểm định ngoài mẫu: **{'có' if params['backtest'] else 'không'}**.",
+        *[f"- Lưu ý: {n}" for n in params["notes"]],
+        "\n**Orchestrator:** " + state.get("brief", ""),
         "## 1. Tóm tắt điều hành", summary_text,
         "## 2. Dữ liệu (Data Engineer)",
         f"- Nguồn: DB chính `lng_prices`, {ds['rows']} phiên, {ds['start']} → {ds['end']}. Trùng ngày: {ds['duplicates']}.",
         f"- Giá trị thiếu trước xử lý: {ds['missing_before']} → xử lý: {ds['method']}.",
-        f"- Kết nối DB ngoài (dữ liệu 2026): **{'đã được phê duyệt' if state.get('external_approved') else 'bị từ chối — không backtest'}**.",
+        f"- Kết nối DB ngoài (dữ liệu 2026): **{db_line}**.",
         "## 3. Phân tích thị trường (Data Analyst)",
         f"- JKM cuối kỳ ({lt['date']}): **{lt['JKM']} USD/MMBtu**; thay đổi ~30 phiên: {lt['change_30d_pct']}%; spread JKM–HH: {lt['jkm_hh_spread']}.",
         f"- Đỉnh: {eda['extremes']['max']['value']} ({eda['extremes']['max']['date']}); đáy: {eda['extremes']['min']['value']} ({eda['extremes']['min']['date']}).",
@@ -39,7 +52,9 @@ def build_report(state: AgentState, summary_text: str) -> str:
             f"| {k} | {eda['correlation_levels'][k]} | {eda['correlation_returns'][k]} |" for k in eda["correlation_levels"]),
         "\n**Nhận định:**\n\n" + state.get("analysis_notes", ""),
         "## 4. Mô hình & dự báo (Data Scientist)",
-        "Walk-forward CV: huấn luyện đến cuối tháng, dự báo toàn bộ tháng kế tiếp (3 fold: 10, 11, 12/2025) — mô phỏng đúng bài toán thực tế.",
+        "Walk-forward CV: huấn luyện đến cuối tháng, dự báo toàn bộ tháng kế tiếp (3 fold: 10, 11, 12/2025) — mô phỏng đúng bài toán thực tế."
+        + (" Tháng mục tiêu cách dữ liệu 2 tháng: mô hình dự báo liên tục qua tháng 01 rồi lấy tháng 02, nên sai số thực tế "
+           "thường lớn hơn MAE kiểm định chéo (vốn đo dự báo 1 tháng)." if params["months_ahead"] > 1 else ""),
         _metrics_table(mr["cv"]["summary"]),
         f"\nMô hình được chọn: **{mr['chosen']}**. Dự báo trung bình tháng {month}: **{mr['forecast_mean']:.3f} USD/MMBtu** "
         f"(dải {mr['forecast_min']:.3f} – {mr['forecast_max']:.3f}).",
@@ -56,7 +71,11 @@ def build_report(state: AgentState, summary_text: str) -> str:
             "\nSo sánh tất cả mô hình trên dữ liệu ngoài mẫu:\n\n" + _metrics_table(bt["all_models"]),
         ]
     else:
-        parts += ["## 5. Kiểm định ngoài mẫu", "Không thực hiện do người dùng từ chối kết nối DB ngoài."]
+        why = ("người dùng từ chối kết nối DB ngoài" if params["backtest"]
+               else "yêu cầu không đòi hỏi backtest nên nhóm không xin kết nối DB ngoài")
+        parts += ["## 5. Kiểm định ngoài mẫu",
+                  f"Không thực hiện vì {why}. Dự báo ở mục 4 **không thay đổi** — dữ liệu 2026 chỉ dùng để chấm điểm dự báo, "
+                  "không bao giờ dùng để huấn luyện — nhưng chưa được đối chiếu với giá thực tế nên độ chính xác chưa được xác nhận."]
     parts += [
         "## 6. Rủi ro & hạn chế",
         "- Biến ngoại sinh tương lai chưa biết → giữ nguyên giá trị cuối (giả định). Cú sốc thời tiết/địa chính trị không nằm trong dữ liệu.",
@@ -70,16 +89,17 @@ def make_node(deps: Deps):
     def report_writer(state: AgentState) -> AgentState:
         run_id = state["run_id"]
         mr, bt = state["model_results"], state.get("backtest")
-        facts = {"latest": state["eda"]["latest"], "forecast_mean": mr["forecast_mean"], "chosen_model": mr["chosen"],
+        facts = {"target_month": state["params"]["target_month"], "latest": state["eda"]["latest"], "forecast_mean": mr["forecast_mean"], "chosen_model": mr["chosen"],
                  "cv": mr["cv"]["summary"][mr["chosen"]], "backtest": bt and bt["metrics"],
                  "analyst": state.get("analysis_notes"), "scientist": state.get("ds_notes")}
         summary, src = ask(
             "Bạn là trưởng nhóm phân tích. Viết tóm tắt điều hành 4-5 câu tiếng Việt cho lãnh đạo: hiện trạng thị trường JKM, "
             "dự báo tháng tới (số trung bình), độ tin cậy, kết quả backtest (nếu có), khuyến nghị. Chỉ dùng số liệu được cung cấp. "
-            "Lưu ý: naive = giữ nguyên giá cuối (không hàm ý tăng/giảm); drift = ngoại suy xu hướng 60 phiên; ridge_lag = hồi quy trên lag.",
-            json.dumps(facts, ensure_ascii=False, default=str),
-            fallback=(f"JKM kết thúc kỳ ở {state['eda']['latest']['JKM']} USD/MMBtu. Nhóm dự báo giá trung bình tháng tới "
-                      f"≈ {mr['forecast_mean']:.3f} USD/MMBtu bằng mô hình {mr['chosen']}."),
+            "Lưu ý: naive = giữ nguyên giá cuối (không hàm ý tăng/giảm); drift = ngoại suy xu hướng 60 phiên; ridge_lag = hồi quy trên lag. "
+            "Trả lời đúng trọng tâm yêu cầu của người dùng. Nếu không có backtest, nói rõ dự báo chưa được kiểm định với giá thực tế.",
+            f"{wrap_untrusted(state['request'])}\nSố liệu:\n" + json.dumps(facts, ensure_ascii=False, default=str),
+            fallback=(f"JKM kết thúc kỳ ở {state['eda']['latest']['JKM']} USD/MMBtu. Nhóm dự báo giá trung bình "
+                      f"≈ {mr['forecast_mean']:.3f} USD/MMBtu cho tháng {state['params']['target_month']} bằng mô hình {mr['chosen']}."),
         )
         report = build_report(state, summary)
         config.REPORTS_DIR.mkdir(exist_ok=True)

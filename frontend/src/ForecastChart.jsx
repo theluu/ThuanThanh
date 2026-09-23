@@ -33,7 +33,12 @@ export default function ForecastChart({ prices, result }) {
           <Line isAnimationActive={false} dataKey="forecast" name="Dự báo" stroke={C.cryo} strokeWidth={2.6} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
-      <figcaption>Giá JKM (USD/MMBtu). Đường thực tế 2026 chỉ xuất hiện khi bạn cho phép kết nối cơ sở dữ liệu ngoài.</figcaption>
+      <figcaption>
+        Giá JKM (USD/MMBtu).{' '}
+        {result?.backtest
+          ? 'Đường đỏ là giá thực tế 2026 từ cơ sở dữ liệu ngoài, dùng để chấm điểm dự báo.'
+          : <strong className="no-actual">Không có đường giá thực tế 2026 — dự báo chưa được đối chiếu vì {result?.params?.backtest === false ? 'yêu cầu không cần backtest' : 'kết nối cơ sở dữ liệu ngoài bị từ chối'}.</strong>}
+      </figcaption>
     </figure>
   )
 }

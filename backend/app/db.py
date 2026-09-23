@@ -14,7 +14,7 @@ runs = Table(
     "runs", metadata,
     Column("id", String(36), primary_key=True),
     Column("request", Text, nullable=False),
-    Column("status", String(32), nullable=False),  # running | waiting_approval | completed | failed
+    Column("status", String(32), nullable=False),  # running | waiting_approval | completed | declined | failed
     Column("pending_approval", JSON),
     Column("result", JSON),  # forecast / backtest / model results for the UI
     Column("report", Text),

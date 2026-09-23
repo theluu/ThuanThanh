@@ -6,3 +6,4 @@ frontend/dist/
 *.zip
 reports/report_*.md
 .DS_Store
+.playwright-mcp/

@@ -149,3 +149,9 @@ main { padding-top: 8px; padding-bottom: 56px; }
   .pipe-fill.flowing, .s-waiting .joint { animation: none; }
   .pipe-fill, .joint { transition: none; }
 }
+
+/* Run without out-of-sample check: make the difference from an approved run visible. */
+.notice { background: var(--valve-soft); border-left: 4px solid var(--valve); padding: 10px 14px; border-radius: 0 6px 6px 0; margin: -8px 0 20px; color: var(--hull); }
+.mf.tone-warn .mf-v { color: var(--valve); }
+.chart .no-actual { color: var(--brick); font-weight: 600; }
+.report.declined h1 { color: var(--brick); }

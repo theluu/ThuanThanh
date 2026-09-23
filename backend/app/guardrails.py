@@ -46,7 +46,7 @@ SYSTEM_GUARD = (
 )
 
 
-def _fold(text: str) -> str:
+def fold(text: str) -> str:
     """Lowercase and strip Vietnamese diacritics so patterns match regardless of accents."""
     text = unicodedata.normalize("NFD", text.lower()).replace("đ", "d")
     return "".join(c for c in text if unicodedata.category(c) != "Mn")
@@ -61,7 +61,7 @@ def check_request(text: str) -> str:
         raise GuardrailError("Yêu cầu không được để trống.")
     if len(text) > MAX_REQUEST_CHARS:
         raise GuardrailError(f"Yêu cầu quá dài (tối đa {MAX_REQUEST_CHARS} ký tự).")
-    if _INJECTION_RE.search(_fold(text)):
+    if _INJECTION_RE.search(fold(text)):
         raise GuardrailError("Yêu cầu bị chặn: phát hiện nội dung giống prompt injection.")
     return text
 

@@ -21,6 +21,9 @@ def make_node(deps: Deps):
             "columns": list(df.columns),
         }
         deps.trace(run_id, NAME, "Loaded training data from main DB & checked quality", summary)
+        if not state["params"]["backtest"]:
+            deps.trace(run_id, NAME, "Backtest not requested: external DB not needed, skipping approval", {})
+            return {"data_summary": summary, "external_approved": False}
         return {"data_summary": summary}
     return data_engineer
 

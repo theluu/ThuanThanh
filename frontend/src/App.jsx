@@ -29,7 +29,7 @@ export default function App() {
         const r = await api.getRun(runId)
         if (stop) return
         setRun(r)
-        if (['completed', 'failed', 'waiting_approval'].includes(r.status)) return
+        if (['completed', 'declined', 'failed', 'waiting_approval'].includes(r.status)) return
       } catch (e) { setError(e.message) }
       if (!stop) setTimeout(tick, 1200)
     }
@@ -69,7 +69,7 @@ export default function App() {
               <p className="brand-sub">Nhóm agent phân tích và dự báo giá JKM</p>
             </div>
           </div>
-          <p className={`llm ${health?.llm ? 'on' : ''}`}>{health ? (health.llm ? `LLM: ${health.providers.join(' → ')}` : 'Chế độ không LLM') : 'Đang kết nối…'}</p>
+          <p className={`llm ${health?.llm ? 'on' : ''}`}>{health ? (health.llm ? `LLM: ${(health.providers ?? ['bật']).join(' → ')}` : 'Chế độ không LLM') : 'Đang kết nối…'}</p>
         </div>
         <form className="wrap ask" onSubmit={start}>
           <label htmlFor="req" className="sr-only">Yêu cầu cho nhóm agent</label>
@@ -91,6 +91,7 @@ export default function App() {
         )}
 
         {run?.status === 'completed' && run.result && <Manifest result={run.result} />}
+        {run?.status === 'completed' && run.result && !run.result.backtest && <NoBacktestNote result={run.result} />}
 
         {run && (
           <div className="desk">
@@ -110,6 +111,8 @@ export default function App() {
               </div>
               {run.status === 'completed' ? (
                 tab === 'chart' ? <ForecastChart prices={prices} result={run.result} /> : <article className="report"><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.report}</ReactMarkdown></article>
+              ) : run.status === 'declined' ? (
+                <article className="report declined"><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.report}</ReactMarkdown></article>
               ) : run.status === 'failed' ? (
                 <p className="error">Lần chạy dừng lại: {run.error}. Kiểm tra cơ sở dữ liệu rồi giao việc lại.</p>
               ) : run.status === 'waiting_approval' ? (
@@ -125,17 +128,22 @@ export default function App() {
   )
 }
 
+const monthLabel = (result) => {
+  const [y, m] = (result.forecast?.[0]?.Date || '').split('-')
+  return `${m}/${y}`
+}
+const skipReason = (result) => (result.params?.backtest === false ? 'Yêu cầu không cần backtest' : 'Kết nối DB ngoài bị từ chối')
+
 function Manifest({ result }) {
   const mr = result.model_results
   const bt = result.backtest
-  const [y, m] = (result.forecast?.[0]?.Date || '').split('-')
-  const month = `${m}/${y}`
+  const month = monthLabel(result)
   const items = [
-    { k: `Dự báo trung bình ${month}`, v: mr.forecast_mean.toFixed(2), u: 'USD/MMBtu', tone: 'cryo' },
+    { k: `Dự báo trung bình ${month}`, v: mr.forecast_mean.toFixed(2), u: bt ? 'USD/MMBtu · đã đối chiếu thực tế' : 'USD/MMBtu · chưa kiểm định', tone: 'cryo' },
     { k: 'Mô hình được chọn', v: mr.chosen, u: `MAE kiểm định chéo ${mr.cv.summary[mr.chosen].MAE.toFixed(2)}` },
     bt
-      ? { k: 'Sai số thực tế tháng 01/2026', v: `${bt.metrics.MAPE.toFixed(1)}%`, u: `MAPE, MAE ${bt.metrics.MAE.toFixed(2)}`, tone: 'brick' }
-      : { k: 'Kiểm định ngoài mẫu', v: 'Bỏ qua', u: 'Kết nối DB ngoài bị từ chối' },
+      ? { k: `Sai số thực tế tháng ${month}`, v: `${bt.metrics.MAPE.toFixed(1)}%`, u: `MAPE, MAE ${bt.metrics.MAE.toFixed(2)}`, tone: 'brick' }
+      : { k: 'Kiểm định ngoài mẫu', v: 'Không có', u: skipReason(result), tone: 'warn' },
     bt
       ? { k: 'Ngày nằm trong khoảng 80%', v: `${Math.round(bt.interval_coverage * 100)}%`, u: `${bt.n_days} phiên`, tone: 'valve' }
       : { k: 'Số phiên dự báo', v: result.forecast.length, u: 'ngày giao dịch' },
@@ -149,5 +157,14 @@ function Manifest({ result }) {
         </div>
       ))}
     </dl>
+  )
+}
+
+function NoBacktestNote({ result }) {
+  return (
+    <p className="notice" role="note">
+      <strong>Dự báo chưa được kiểm định với giá thực tế.</strong> {skipReason(result)}, nên không có số liệu {monthLabel(result)} để đối chiếu.
+      Con số dự báo giống hệt lần chạy có kiểm định — dữ liệu 2026 chỉ dùng để chấm điểm dự báo, không dùng để huấn luyện mô hình.
+    </p>
   )
 }

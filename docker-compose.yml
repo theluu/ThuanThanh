@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lng_postgres
+    environment:
+      POSTGRES_USER: lng
+      POSTGRES_PASSWORD: lng
+      POSTGRES_DB: lng_main
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - lng_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lng -d lng_main"]
+      interval: 3s
+      retries: 20
+volumes:
+  lng_pgdata:

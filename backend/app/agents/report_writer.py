@@ -27,6 +27,8 @@ def build_report(state: AgentState, summary_text: str) -> str:
     month = fc[0]["Date"][:7]
     if params["backtest"]:
         db_line = "đã được phê duyệt" if state.get("external_approved") else "bị từ chối — không backtest"
+    elif not params.get("backtest_available", True):
+        db_line = "không cần (DB ngoài chưa có giá thực tế của tháng này)"
     else:
         db_line = "không cần (yêu cầu không đòi hỏi backtest)"
     lt = eda["latest"]
@@ -52,12 +54,17 @@ def build_report(state: AgentState, summary_text: str) -> str:
             f"| {k} | {eda['correlation_levels'][k]} | {eda['correlation_returns'][k]} |" for k in eda["correlation_levels"]),
         "\n**Nhận định:**\n\n" + state.get("analysis_notes", ""),
         "## 4. Mô hình & dự báo (Data Scientist)",
-        "Walk-forward CV: huấn luyện đến cuối tháng, dự báo toàn bộ tháng kế tiếp (3 fold: 10, 11, 12/2025) — mô phỏng đúng bài toán thực tế."
-        + (" Tháng mục tiêu cách dữ liệu 2 tháng: mô hình dự báo liên tục qua tháng 01 rồi lấy tháng 02, nên sai số thực tế "
-           "thường lớn hơn MAE kiểm định chéo (vốn đo dự báo 1 tháng)." if params["months_ahead"] > 1 else ""),
+        f"Walk-forward CV: huấn luyện đến cuối tháng, dự báo toàn bộ tháng cách đó {params['months_ahead']} tháng — đúng tầm dự báo "
+        f"được yêu cầu (tháng kiểm tra: {', '.join(f['test_month'] for f in mr['cv']['folds'])})."
+        + (" Tháng mục tiêu càng xa thì sai số và khoảng tin cậy càng lớn." if params["months_ahead"] > 1 else ""),
         _metrics_table(mr["cv"]["summary"]),
         f"\nMô hình được chọn: **{mr['chosen']}**. Dự báo trung bình tháng {month}: **{mr['forecast_mean']:.3f} USD/MMBtu** "
-        f"(dải {mr['forecast_min']:.3f} – {mr['forecast_max']:.3f}).",
+        f"(dải {mr['forecast_min']:.3f} – {mr['forecast_max']:.3f}; khoảng tin cậy 80% trung bình "
+        f"{mr.get('band_low', 0):.2f} – {mr.get('band_high', 0):.2f}).",
+        *(["\n_Vì sao con số giống nhau giữa các tháng?_ Mô hình **naive** (giữ nguyên giá cuối) có sai số thấp nhất ở đúng tầm "
+           "dự báo này: giá JKM biến động gần như ngẫu nhiên, nên không mô hình nào trong dữ liệu 2 năm dự báo được hướng đi tốt hơn "
+           "giá hiện tại. Điều thay đổi theo tháng là độ bất định — khoảng tin cậy rộng dần khi tháng mục tiêu xa hơn."]
+          if mr["chosen"] == "naive" else []),
         "\n| Ngày | Dự báo | Cận dưới 80% | Cận trên 80% |\n|---|---|---|---|\n" + "\n".join(
             f"| {r['Date']} | {r['forecast']:.3f} | {r['lower']:.3f} | {r['upper']:.3f} |" for r in fc),
         "\n**Giải thích:**\n\n" + state.get("ds_notes", ""),
@@ -72,6 +79,7 @@ def build_report(state: AgentState, summary_text: str) -> str:
         ]
     else:
         why = ("người dùng từ chối kết nối DB ngoài" if params["backtest"]
+               else "DB ngoài chỉ có giá thực tế 01–02/2026, chưa có tháng này" if not params.get("backtest_available", True)
                else "yêu cầu không đòi hỏi backtest nên nhóm không xin kết nối DB ngoài")
         parts += ["## 5. Kiểm định ngoài mẫu",
                   f"Không thực hiện vì {why}. Dự báo ở mục 4 **không thay đổi** — dữ liệu 2026 chỉ dùng để chấm điểm dự báo, "
@@ -94,7 +102,7 @@ def make_node(deps: Deps):
                  "analyst": state.get("analysis_notes"), "scientist": state.get("ds_notes")}
         summary, src = ask(
             "Bạn là trưởng nhóm phân tích. Viết tóm tắt điều hành 4-5 câu tiếng Việt cho lãnh đạo: hiện trạng thị trường JKM, "
-            "dự báo tháng tới (số trung bình), độ tin cậy, kết quả backtest (nếu có), khuyến nghị. Chỉ dùng số liệu được cung cấp. "
+            "dự báo cho tháng mục tiêu (số trung bình, nêu rõ tháng), độ tin cậy, kết quả backtest (nếu có), khuyến nghị. Chỉ dùng số liệu được cung cấp. "
             "Lưu ý: naive = giữ nguyên giá cuối (không hàm ý tăng/giảm); drift = ngoại suy xu hướng 60 phiên; ridge_lag = hồi quy trên lag. "
             "Trả lời đúng trọng tâm yêu cầu của người dùng. Nếu không có backtest, nói rõ dự báo chưa được kiểm định với giá thực tế.",
             f"{wrap_untrusted(state['request'])}\nSố liệu:\n" + json.dumps(facts, ensure_ascii=False, default=str),

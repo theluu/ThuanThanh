@@ -43,6 +43,29 @@ def test_off_topic_request_is_declined_before_any_work(graph_and_steps):
     assert {a for a, _ in steps} == {"Orchestrator"}
 
 
+def test_capability_question_gets_help_not_refusal(graph_and_steps):
+    graph, steps = graph_and_steps
+    out = graph.invoke({"run_id": "t5", "request": "Bạn làm được những gì"}, {"configurable": {"thread_id": "t5"}})
+    assert out["declined"] and out["kind"] == "help" and "ngoài phạm vi" not in out["report"]
+    assert out["examples"] and {a for a, _ in steps} == {"Orchestrator"}
+
+
+def test_misspelled_forecast_request_runs(graph_and_steps):
+    graph, _ = graph_and_steps
+    out = graph.invoke({"run_id": "t6", "request": "Dựa báo tháng 1 cho tôi"}, {"configurable": {"thread_id": "t6"}})
+    assert not out.get("declined") and "__interrupt__" in out  # reached the approval valve
+
+
+def test_off_topic_gets_llm_second_look(monkeypatch):
+    from app.agents import orchestrator
+    monkeypatch.setattr(orchestrator, "llm_enabled", lambda: True)
+    monkeypatch.setattr(orchestrator, "ask", lambda *a, **k: ("IN", "openai"))
+    assert orchestrator._classify("cho tôi con số tháng sau đi")[0] == "in"
+    monkeypatch.setattr(orchestrator, "ask", lambda *a, **k: ("OUT", "openai"))
+    assert orchestrator._classify("Hôm nay ăn gì")[0] == "out"
+    assert orchestrator._classify("s") == ("out", "keywords (too short to be a request)", "none")
+
+
 def test_no_backtest_request_skips_approval(graph_and_steps):
     graph, steps = graph_and_steps
     out = graph.invoke({"run_id": "t3", "request": "Dự báo JKM tháng tới, không cần backtest"},
@@ -76,3 +99,12 @@ def test_graph_rejected_skips_backtest(run_graph):
     assert final["backtest"] is None
     assert "từ chối" in final["report"]
     assert len(final["forecast"]) == 21
+
+
+def test_october_target_forecasts_october_without_approval(graph_and_steps):
+    graph, steps = graph_and_steps
+    out = graph.invoke({"run_id": "t7", "request": "Phân tích thị trường LNG 2024–2025 và dự báo giá JKM tháng 10"},
+                       {"configurable": {"thread_id": "t7"}})
+    assert "__interrupt__" not in out and not any(a == "Human" for a, _ in steps)  # no actuals -> nothing to approve
+    assert {r["Date"][:7] for r in out["forecast"]} == {"2026-10"}
+    assert "tháng 2026-10" in out["report"] and "chưa có tháng này" in out["report"]

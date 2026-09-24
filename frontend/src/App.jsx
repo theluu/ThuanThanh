@@ -41,11 +41,12 @@ export default function App() {
     if (run?.status === 'completed') api.prices(runId).then(setPrices).catch((e) => setError(e.message))
   }, [runId, run?.status, run?.result?.external_approved])
 
-  const start = async (e) => {
-    e.preventDefault()
+  const startRun = async (text) => {
     setError(''); setRun(null); setPrices(null)
-    try { setRunId((await api.startRun(request)).run_id) } catch (err) { setError(err.message) }
+    try { setRunId((await api.startRun(text)).run_id) } catch (err) { setError(err.message) }
   }
+  const start = (e) => { e.preventDefault(); startRun(request) }
+  const tryExample = (text) => { setRequest(text); startRun(text) }
 
   const decide = async (approved) => {
     setDeciding(true)
@@ -92,6 +93,9 @@ export default function App() {
 
         {run?.status === 'completed' && run.result && <Manifest result={run.result} />}
         {run?.status === 'completed' && run.result && !run.result.backtest && <NoBacktestNote result={run.result} />}
+        {run?.status === 'completed' && run.result?.params?.notes?.length > 0 && (
+          <ul className="notice notes" role="note">{run.result.params.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        )}
 
         {run && (
           <div className="desk">
@@ -112,7 +116,16 @@ export default function App() {
               {run.status === 'completed' ? (
                 tab === 'chart' ? <ForecastChart prices={prices} result={run.result} /> : <article className="report"><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.report}</ReactMarkdown></article>
               ) : run.status === 'declined' ? (
-                <article className="report declined"><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.report}</ReactMarkdown></article>
+                <>
+                  <article className={`report declined ${run.result?.kind === 'help' ? 'help' : ''}`}><ReactMarkdown remarkPlugins={[remarkGfm]}>{run.report}</ReactMarkdown></article>
+                  {run.result?.examples?.length > 0 && (
+                    <div className="examples">
+                      {run.result.examples.map((ex) => (
+                        <button key={ex} type="button" className="btn btn-quiet example" onClick={() => tryExample(ex)}>{ex}</button>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : run.status === 'failed' ? (
                 <p className="error">Lần chạy dừng lại: {run.error}. Kiểm tra cơ sở dữ liệu rồi giao việc lại.</p>
               ) : run.status === 'waiting_approval' ? (
@@ -132,7 +145,11 @@ const monthLabel = (result) => {
   const [y, m] = (result.forecast?.[0]?.Date || '').split('-')
   return `${m}/${y}`
 }
-const skipReason = (result) => (result.params?.backtest === false ? 'Yêu cầu không cần backtest' : 'Kết nối DB ngoài bị từ chối')
+const skipReason = (result) => {
+  const p = result.params || {}
+  if (p.backtest_available === false) return 'DB ngoài chỉ có giá thực tế 01–02/2026'
+  return p.backtest === false ? 'Yêu cầu không cần backtest' : 'Kết nối DB ngoài bị từ chối'
+}
 
 function Manifest({ result }) {
   const mr = result.model_results
@@ -140,7 +157,9 @@ function Manifest({ result }) {
   const month = monthLabel(result)
   const items = [
     { k: `Dự báo trung bình ${month}`, v: mr.forecast_mean.toFixed(2), u: bt ? 'USD/MMBtu · đã đối chiếu thực tế' : 'USD/MMBtu · chưa kiểm định', tone: 'cryo' },
-    { k: 'Mô hình được chọn', v: mr.chosen, u: `MAE kiểm định chéo ${mr.cv.summary[mr.chosen].MAE.toFixed(2)}` },
+    mr.band_low != null
+      ? { k: 'Khoảng tin cậy 80%', v: `${mr.band_low.toFixed(2)} – ${mr.band_high.toFixed(2)}`, u: `mô hình ${mr.chosen}, MAE kiểm định chéo ${mr.cv.summary[mr.chosen].MAE.toFixed(2)}` }
+      : { k: 'Mô hình được chọn', v: mr.chosen, u: `MAE kiểm định chéo ${mr.cv.summary[mr.chosen].MAE.toFixed(2)}` },
     bt
       ? { k: `Sai số thực tế tháng ${month}`, v: `${bt.metrics.MAPE.toFixed(1)}%`, u: `MAPE, MAE ${bt.metrics.MAE.toFixed(2)}`, tone: 'brick' }
       : { k: 'Kiểm định ngoài mẫu', v: 'Không có', u: skipReason(result), tone: 'warn' },
@@ -164,7 +183,7 @@ function NoBacktestNote({ result }) {
   return (
     <p className="notice" role="note">
       <strong>Dự báo chưa được kiểm định với giá thực tế.</strong> {skipReason(result)}, nên không có số liệu {monthLabel(result)} để đối chiếu.
-      Con số dự báo giống hệt lần chạy có kiểm định — dữ liệu 2026 chỉ dùng để chấm điểm dự báo, không dùng để huấn luyện mô hình.
+      {result.params?.backtest_available !== false && ' Con số dự báo giống hệt lần chạy có kiểm định — dữ liệu 2026 chỉ dùng để chấm điểm dự báo, không dùng để huấn luyện mô hình.'}
     </p>
   )
 }

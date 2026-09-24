@@ -8,6 +8,12 @@ from app.tools.intent import extract_params, quote, scope
     ("dự báo khí hóa lỏng tháng tới", "in"),
     ("Brent ảnh hưởng thế nào tới giá?", "in"),
     ("Dự báo giá tháng tới", "maybe"),
+    ("Dựa báo tháng 1 cho tôi", "maybe"),  # typo of "dự báo"
+    ("Dự bảo tháng 2", "maybe"),
+    ("forcast JKM", "in"),
+    ("phan tic thi truong khi hoa lỏng", "in"),
+    ("Bạn làm được những gì", "help"),
+    ("What can you do?", "help"),
     ("Hôm nay ăn gì", "out"),
     ("s", "out"),
     ("Viết cho tôi một bài thơ", "out"),
@@ -28,9 +34,20 @@ def test_target_month(text, month, ahead):
     assert (p["target_month"], p["months_ahead"]) == (month, ahead) and not p["notes"]
 
 
-def test_unsupported_month_falls_back_with_note():
-    p = extract_params("Dự báo JKM tháng 5")
-    assert p["target_month"] == "2026-01" and "chưa được hỗ trợ" in p["notes"][0]
+@pytest.mark.parametrize("text,month", [
+    ("Phân tích thị trường LNG 2024–2025 và dự báo giá JKM tháng 10", "2026-10"),
+    ("Dự báo JKM tháng 5", "2026-05"),
+    ("Forecast JKM for October 2026", "2026-10"),
+])
+def test_later_2026_month_is_forecast_without_backtest(text, month):
+    p = extract_params(text)
+    assert p["target_month"] == month and p["months_ahead"] == int(month[5:])
+    assert p["backtest"] is False and p["backtest_available"] is False and "Chưa có giá thực tế" in p["notes"][0]
+
+
+def test_month_beyond_2026_falls_back_with_note():
+    p = extract_params("Dự báo JKM tháng 3/2027")
+    assert p["target_month"] == "2026-01" and "quá xa" in p["notes"][0]
 
 
 @pytest.mark.parametrize("text,wanted", [

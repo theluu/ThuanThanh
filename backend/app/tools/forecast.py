@@ -105,24 +105,30 @@ def fit_and_forecast(df: pd.DataFrame, model_name: str, dates: list[pd.Timestamp
     })
 
 
-def walk_forward_cv(df: pd.DataFrame, n_folds: int = 3) -> dict:
-    """Expanding-window CV that mimics the real task: train up to month-end, forecast the whole next month."""
+def walk_forward_cv(df: pd.DataFrame, n_folds: int = 3, horizon: int = 1) -> dict:
+    """Expanding-window CV that mimics the real task: train up to month-end, forecast the whole month `horizon` months later.
+
+    Scoring at the requested horizon matters: the best 1-month model is not necessarily the best 10-month model.
+    """
     month_ends = df.groupby(df["Date"].dt.to_period("M"))["Date"].max().tolist()
-    origins = month_ends[-(n_folds + 1):-1]
+    origins = month_ends[-(n_folds + horizon):-horizon]
     folds, per_model = [], {m: [] for m in MODELS}
     for origin in origins:
         train = df[df["Date"] <= origin]
-        test = df[(df["Date"] > origin) & (df["Date"].dt.to_period("M") == (origin + pd.offsets.MonthBegin(1)).to_period("M"))]
-        fold = {"train_end": str(origin.date()), "test_month": str(test["Date"].iloc[0].to_period("M")), "n_test": len(test)}
+        test_month = origin.to_period("M") + horizon
+        test = df[df["Date"].dt.to_period("M") == test_month]
+        # Multi-step models need the business-day path through the months in between.
+        path = horizon_dates(origin, horizon - 1) if horizon > 1 else []
+        fold = {"train_end": str(origin.date()), "test_month": str(test_month), "n_test": len(test)}
         for m in MODELS:
-            fc = fit_and_forecast(train, m, list(test["Date"]))
+            fc = fit_and_forecast(train, m, path + list(test["Date"])).tail(len(test))
             score = metrics(test[TARGET].to_numpy(), fc["forecast"].to_numpy())
             fold[m] = score
             per_model[m].append(score)
         folds.append(fold)
     summary = {m: {k: float(np.mean([s[k] for s in scores])) for k in ("MAE", "RMSE", "MAPE")} for m, scores in per_model.items()}
     best = min(summary, key=lambda m: summary[m]["MAE"])
-    return {"folds": folds, "summary": summary, "best_model": best}
+    return {"folds": folds, "summary": summary, "best_model": best, "horizon": horizon}
 
 
 def backtest(forecast: pd.DataFrame, actual_df: pd.DataFrame) -> dict:

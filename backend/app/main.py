@@ -88,8 +88,9 @@ def _execute(run_id: str, payload) -> None:
             if out.get("__interrupt__"):
                 db.update_run(run_id, status="waiting_approval", pending_approval=out["__interrupt__"][0].value)
                 return
-            if out.get("declined"):  # Orchestrator refused an off-topic request; nothing else ran
-                db.update_run(run_id, status="declined", result={"llm_calls": out.get("llm_calls")}, report=out["report"])
+            if out.get("declined"):  # Orchestrator refused an off-topic request or answered a help question; nothing else ran
+                result = {"kind": out.get("kind"), "examples": out.get("examples"), "llm_calls": out.get("llm_calls")}
+                db.update_run(run_id, status="declined", result=result, report=out["report"])
                 return
             keys = ("params", "plan", "forecast", "backtest", "model_results", "external_approved", "llm_calls")
             result = {k: out.get(k) for k in keys}

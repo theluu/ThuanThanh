@@ -5,7 +5,9 @@ from typing import Any, TypedDict
 class AgentState(TypedDict, total=False):
     run_id: str
     request: str
-    declined: bool            # Orchestrator: request outside LNG/JKM scope -> run stops
+    declined: bool            # Orchestrator: nothing to run (off-topic or a question about the team) -> run stops
+    kind: str                 # Orchestrator, when declined: "out_of_scope" | "help"
+    examples: list[str]       # Orchestrator, when declined: requests the user can try instead
     params: dict              # Orchestrator: target_month, months_ahead, backtest, notes
     brief: str                # Orchestrator: restated objective
     plan: list[dict]          # Orchestrator: ordered tasks per agent

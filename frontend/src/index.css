@@ -155,3 +155,9 @@ main { padding-top: 8px; padding-bottom: 56px; }
 .mf.tone-warn .mf-v { color: var(--valve); }
 .chart .no-actual { color: var(--brick); font-weight: 600; }
 .report.declined h1 { color: var(--brick); }
+.notice.notes { list-style: none; }
+.notice.notes li + li { margin-top: 4px; }
+.report.declined.help h1 { color: var(--hull); }
+.examples { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px; max-width: 76ch; }
+.examples .example { white-space: normal; text-align: left; font-weight: 600; padding: 10px 14px; }
+.examples .example:hover { box-shadow: inset 0 0 0 1.5px var(--cryo); color: #08788A; }

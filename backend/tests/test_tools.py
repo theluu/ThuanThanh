@@ -54,6 +54,15 @@ def test_walk_forward_cv_ranks_models(train_df):
     assert len(cv["folds"]) == 3
 
 
+def test_walk_forward_cv_scores_at_requested_horizon(train_df):
+    clean, _ = preprocess(train_df)
+    cv = walk_forward_cv(clean, n_folds=3, horizon=10)
+    assert [f["test_month"] for f in cv["folds"]] == ["2025-10", "2025-11", "2025-12"]
+    assert [f["train_end"][:7] for f in cv["folds"]] == ["2024-12", "2025-01", "2025-02"]
+    # further ahead is harder than one month ahead
+    assert cv["summary"]["naive"]["MAE"] > walk_forward_cv(clean, n_folds=3)["summary"]["naive"]["MAE"]
+
+
 def test_backtest_aligns_on_common_dates(train_df, eval_df):
     clean, _ = preprocess(train_df)
     fc = fit_and_forecast(clean, "naive", horizon_dates(clean["Date"].iloc[-1]))

@@ -37,7 +37,7 @@ export default function ForecastChart({ prices, result }) {
         Giá JKM (USD/MMBtu).{' '}
         {result?.backtest
           ? 'Đường đỏ là giá thực tế 2026 từ cơ sở dữ liệu ngoài, dùng để chấm điểm dự báo.'
-          : <strong className="no-actual">Không có đường giá thực tế 2026 — dự báo chưa được đối chiếu vì {result?.params?.backtest === false ? 'yêu cầu không cần backtest' : 'kết nối cơ sở dữ liệu ngoài bị từ chối'}.</strong>}
+          : <strong className="no-actual">Không có đường giá thực tế 2026 — dự báo chưa được đối chiếu vì {result?.params?.backtest_available === false ? 'cơ sở dữ liệu ngoài chỉ có giá thực tế 01–02/2026' : result?.params?.backtest === false ? 'yêu cầu không cần backtest' : 'kết nối cơ sở dữ liệu ngoài bị từ chối'}.</strong>}
       </figcaption>
     </figure>
   )
